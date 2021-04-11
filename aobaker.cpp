@@ -499,19 +499,19 @@ namespace aobaker {
 }
 
 void aobaker::BakeAoToVertices(
-	const float* firstVertexPosition, float* firstAoTarget, int vertexCount, size_t stride,
+	const float* firstVertexPosition, float* firstAoTarget, int vertexCount, size_t vertexStride, size_t targetStride,
 	const unsigned int* indices, int indexCount,
 	const config& conf)
 {
 	if (conf.voxelize)
 	{
-		voxelModel voxelized(firstVertexPosition, vertexCount, stride, indices, indexCount, conf.voxelSize);
+		voxelModel voxelized(firstVertexPosition, vertexCount, vertexStride, indices, indexCount, conf.voxelSize);
 
 		#pragma omp parallel for
 		for (int q = 0; q < vertexCount; q++)
 		{
-			vec3 vertexPos = *((vec3*)(((char*)firstVertexPosition) + stride * q));
-			float* aoTarget = (float*)(((char*)firstAoTarget) + stride * q);
+			vec3 vertexPos = *((vec3*)(((char*)firstVertexPosition) + vertexStride * q));
+			float* aoTarget = (float*)(((char*)firstAoTarget) + targetStride * q);
 
 			std::vector<std::pair<bool, float>> rayResults;
 			for (int i = 0; i < conf.rayCount; i++)
@@ -534,8 +534,8 @@ void aobaker::BakeAoToVertices(
 		#pragma omp parallel for
 		for (int q = 0; q < vertexCount; q++)
 		{
-			vec3 vertexPos = *((vec3*)(((char*)firstVertexPosition) + stride * q));
-			float* aoTarget = (float*)(((char*)firstAoTarget) + stride * q);
+			vec3 vertexPos = *((vec3*)(((char*)firstVertexPosition) + vertexStride * q));
+			float* aoTarget = (float*)(((char*)firstAoTarget) + targetStride * q);
 
 			std::vector<std::pair<bool, float>> rayResults;
 			for (int i = 0; i < conf.rayCount; i++)
@@ -552,9 +552,9 @@ void aobaker::BakeAoToVertices(
 						continue; // current vertex belongs to this face
 
 					didHit = MathRayTriIntersect(vertexPos + (rayDir * conf.rayOriginOffset), rayDir,
-						*((vec3*)(((char*)firstVertexPosition) + stride * indices[j + 0])),
-						*((vec3*)(((char*)firstVertexPosition) + stride * indices[j + 1])),
-						*((vec3*)(((char*)firstVertexPosition) + stride * indices[j + 2])), &distance);
+						*((vec3*)(((char*)firstVertexPosition) + vertexStride * indices[j + 0])),
+						*((vec3*)(((char*)firstVertexPosition) + vertexStride * indices[j + 1])),
+						*((vec3*)(((char*)firstVertexPosition) + vertexStride * indices[j + 2])), &distance);
 				}
 				if (distance > conf.rayDistance)
 					distance = conf.rayDistance;
@@ -569,13 +569,13 @@ void aobaker::BakeAoToVertices(
 		for (int i = 0; i < indexCount; i += 3)
 		{
 			float average =
-				(*((float*)(((char*)firstAoTarget) + stride * indices[i + 0])) +
-					*((float*)(((char*)firstAoTarget) + stride * indices[i + 1])) +
-					*((float*)(((char*)firstAoTarget) + stride * indices[i + 2]))) / 3.0f;
+				(*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 0])) +
+					*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 1])) +
+					*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 2]))) / 3.0f;
 
-			*((float*)(((char*)firstAoTarget) + stride * indices[i + 0])) = MathMix(*((float*)(((char*)firstAoTarget) + stride * indices[i + 0])), average, conf.denoiseWeight);
-			*((float*)(((char*)firstAoTarget) + stride * indices[i + 1])) = MathMix(*((float*)(((char*)firstAoTarget) + stride * indices[i + 1])), average, conf.denoiseWeight);
-			*((float*)(((char*)firstAoTarget) + stride * indices[i + 2])) = MathMix(*((float*)(((char*)firstAoTarget) + stride * indices[i + 2])), average, conf.denoiseWeight);
+			*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 0])) = MathMix(*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 0])), average, conf.denoiseWeight);
+			*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 1])) = MathMix(*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 1])), average, conf.denoiseWeight);
+			*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 2])) = MathMix(*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 2])), average, conf.denoiseWeight);
 		}
 	}
 }

@@ -221,7 +221,7 @@ namespace aobaker {
 		vec3 minPos;
 		float voxelSize;
 		std::vector<std::vector<std::vector<bool>>> mat;
-		voxelModel::voxelModel(const float* firstVertexPosition, int vertexCount, size_t stride, const unsigned int* indices, int indexCount, float voxelSize)
+		voxelModel::voxelModel(const float* firstVertexPosition, int vertexCount, unsigned int stride, const unsigned int* indices, int indexCount, float voxelSize)
 		{
 			this->voxelSize = voxelSize;
 
@@ -362,7 +362,7 @@ namespace aobaker {
 				}
 			}
 		}
-		voxelModel::voxelModel(const double* firstVertexPosition, int vertexCount, size_t stride, const unsigned int* indices, int indexCount, float voxelSize)
+		voxelModel::voxelModel(const double* firstVertexPosition, int vertexCount, unsigned int stride, const unsigned int* indices, int indexCount, float voxelSize)
 		{
 			this->voxelSize = voxelSize;
 
@@ -646,7 +646,7 @@ namespace aobaker {
 }
 
 void aobaker::BakeAoToVertices(
-	const float* firstVertexPosition, float* firstAoTarget, int vertexCount, size_t vertexStride, size_t targetStride,
+	const float* firstVertexPosition, float* firstAoTarget, int vertexCount, unsigned int vertexStride, unsigned int targetStride,
 	const unsigned int* indices, int indexCount,
 	const config& conf)
 {
@@ -728,7 +728,7 @@ void aobaker::BakeAoToVertices(
 }
 
 void aobaker::BakeAoToVertices(
-	const double* firstVertexPosition, float* firstAoTarget, int vertexCount, size_t vertexStride, size_t targetStride,
+	const double* firstVertexPosition, float* firstAoTarget, int vertexCount, unsigned int vertexStride, unsigned int targetStride,
 	const unsigned int* indices, int indexCount,
 	const config& conf)
 {

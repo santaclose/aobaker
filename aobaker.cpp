@@ -56,6 +56,12 @@ namespace aobaker {
 	{
 		return vec2(v.x - w.x, v.y - w.y);
 	}
+	struct dvec3 {
+		operator vec3() const { return vec3(x, y, z); }
+		double x;
+		double y;
+		double z;
+	};
 	float RandomFloat()
 	{
 		return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
@@ -356,6 +362,147 @@ namespace aobaker {
 				}
 			}
 		}
+		voxelModel::voxelModel(const double* firstVertexPosition, int vertexCount, size_t stride, const unsigned int* indices, int indexCount, float voxelSize)
+		{
+			this->voxelSize = voxelSize;
+
+			vec3 minP = *((dvec3*)firstVertexPosition);
+			vec3 maxP = minP;
+
+			for (int i = 1; i < vertexCount; i++)
+			{
+				vec3 currentVtxPos = *((dvec3*)(((char*)firstVertexPosition) + stride * i));
+				minP.x = std::min(minP.x, currentVtxPos.x);
+				minP.y = std::min(minP.y, currentVtxPos.y);
+				minP.z = std::min(minP.z, currentVtxPos.z);
+				maxP.x = std::max(maxP.x, currentVtxPos.x);
+				maxP.y = std::max(maxP.y, currentVtxPos.y);
+				maxP.z = std::max(maxP.z, currentVtxPos.z);
+			}
+
+			minPos = minP;
+
+			unsigned int voxelCount[3];
+			voxelCount[0] = (unsigned int)std::ceil((maxP.x - minP.x) / voxelSize);
+			voxelCount[1] = (unsigned int)std::ceil((maxP.y - minP.y) / voxelSize);
+			voxelCount[2] = (unsigned int)std::ceil((maxP.z - minP.z) / voxelSize);
+
+			// allocate matrix
+			mat.resize(voxelCount[0]);
+			for (auto& vector : mat)
+			{
+				vector.resize(voxelCount[1]);
+				for (auto& subvector : vector)
+					subvector.resize(voxelCount[2]);
+			}
+
+			// rasterize
+			for (int indexI = 0; indexI < indexCount; indexI += 3)
+			{
+				unsigned int indexA = indices[indexI + 0];
+				unsigned int indexB = indices[indexI + 1];
+				unsigned int indexC = indices[indexI + 2];
+
+				vec3 posA = *((dvec3*)(((char*)firstVertexPosition) + stride * indexA));
+				vec3 posB = *((dvec3*)(((char*)firstVertexPosition) + stride * indexB));
+				vec3 posC = *((dvec3*)(((char*)firstVertexPosition) + stride * indexC));
+
+				vec3 triNormal = MathCross(posB - posA, posC - posA);
+
+				vec3 trianglebbmin = {
+					std::min(std::min(posA.x, posB.x), posC.x),
+					std::min(std::min(posA.y, posB.y), posC.y),
+					std::min(std::min(posA.z, posB.z), posC.z)
+				};
+				vec3 trianglebbmax = {
+					std::max(std::max(posA.x, posB.x), posC.x),
+					std::max(std::max(posA.y, posB.y), posC.y),
+					std::max(std::max(posA.z, posB.z), posC.z)
+				};
+
+				unsigned int minVoxelCoords[3];
+				minVoxelCoords[0] = MathClamp((int)((trianglebbmin.x - minPos.x) / voxelSize), 0, (int)(mat.size() - 1));
+				minVoxelCoords[1] = MathClamp((int)((trianglebbmin.y - minPos.y) / voxelSize), 0, (int)(mat[0].size() - 1));
+				minVoxelCoords[2] = MathClamp((int)((trianglebbmin.z - minPos.z) / voxelSize), 0, (int)(mat[0][0].size() - 1));
+
+				unsigned int maxVoxelCoords[3];
+				maxVoxelCoords[0] = MathClamp((int)((trianglebbmax.x - minPos.x) / voxelSize), 0, (int)(mat.size() - 1));
+				maxVoxelCoords[1] = MathClamp((int)((trianglebbmax.y - minPos.y) / voxelSize), 0, (int)(mat[0].size() - 1));
+				maxVoxelCoords[2] = MathClamp((int)((trianglebbmax.z - minPos.z) / voxelSize), 0, (int)(mat[0][0].size() - 1));
+
+				std::vector<std::vector<bool>> xyMat;
+				std::vector<std::vector<bool>> xzMat;
+				std::vector<std::vector<bool>> zyMat;
+				std::vector<std::vector<std::vector<bool>>> xyzMat;
+
+				xyMat.resize(maxVoxelCoords[0] - minVoxelCoords[0] + 1);
+				for (auto& vec : xyMat)
+					vec.resize(maxVoxelCoords[1] - minVoxelCoords[1] + 1);
+				xzMat.resize(maxVoxelCoords[0] - minVoxelCoords[0] + 1);
+				for (auto& vec : xzMat)
+					vec.resize(maxVoxelCoords[2] - minVoxelCoords[2] + 1);
+				zyMat.resize(maxVoxelCoords[2] - minVoxelCoords[2] + 1);
+				for (auto& vec : zyMat)
+					vec.resize(maxVoxelCoords[1] - minVoxelCoords[1] + 1);
+
+				for (int i = minVoxelCoords[0]; i <= maxVoxelCoords[0]; i++)
+				{
+					for (int j = minVoxelCoords[1]; j <= maxVoxelCoords[1]; j++)
+					{
+						vec2 voxelCenter = vec2(minPos.x, minPos.y) + vec2(i * voxelSize + voxelSize / 2.0f, j * voxelSize + voxelSize / 2.0f);
+						vec2 tri0 = vec2(posA.x, posA.y);
+						vec2 tri1 = vec2(posB.x, posB.y);
+						vec2 tri2 = vec2(posC.x, posC.y);
+						xyMat[i - minVoxelCoords[0]][j - minVoxelCoords[1]] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
+					}
+				}
+
+				for (int i = minVoxelCoords[0]; i <= maxVoxelCoords[0]; i++)
+				{
+					for (int j = minVoxelCoords[2]; j <= maxVoxelCoords[2]; j++)
+					{
+						vec2 voxelCenter = vec2(minPos.x, minPos.z) + vec2(i * voxelSize + voxelSize / 2.0f, j * voxelSize + voxelSize / 2.0f);
+						vec2 tri0 = vec2(posA.x, posA.z);
+						vec2 tri1 = vec2(posB.x, posB.z);
+						vec2 tri2 = vec2(posC.x, posC.z);
+						xzMat[i - minVoxelCoords[0]][j - minVoxelCoords[2]] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
+					}
+				}
+
+				for (int i = minVoxelCoords[2]; i <= maxVoxelCoords[2]; i++)
+				{
+					for (int j = minVoxelCoords[1]; j <= maxVoxelCoords[1]; j++)
+					{
+						vec2 voxelCenter = vec2(minPos.z, minPos.y) + vec2(i * voxelSize + voxelSize / 2.0f, j * voxelSize + voxelSize / 2.0f);
+						vec2 tri0 = vec2(posA.z, posA.y);
+						vec2 tri1 = vec2(posB.z, posB.y);
+						vec2 tri2 = vec2(posC.z, posC.y);
+						zyMat[i - minVoxelCoords[2]][j - minVoxelCoords[1]] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
+					}
+				}
+
+				for (int i = minVoxelCoords[0]; i <= maxVoxelCoords[0]; i++)
+				{
+					for (int j = minVoxelCoords[1]; j <= maxVoxelCoords[1]; j++)
+					{
+						for (int k = minVoxelCoords[2]; k <= maxVoxelCoords[2]; k++)
+						{
+							vec3 voxelCenter =
+								vec3(minPos.x, minPos.y, minPos.z) +
+								vec3(i * voxelSize + voxelSize / 2.0f, j * voxelSize + voxelSize / 2.0f, k * voxelSize + voxelSize / 2.0f);
+
+							bool voxelValueForCurrentTri =
+								xyMat[i - minVoxelCoords[0]][j - minVoxelCoords[1]] &&
+								xzMat[i - minVoxelCoords[0]][k - minVoxelCoords[2]] &&
+								zyMat[k - minVoxelCoords[2]][j - minVoxelCoords[1]] &&
+								std::abs(MathPlanePointDistance(triNormal, posA, voxelCenter)) < voxelSize * RASTERIZE_MAX_DISTANCE;
+
+							mat[i][j][k] = mat[i][j][k] || voxelValueForCurrentTri;
+						}
+					}
+				}
+			}
+		}
 		vec3 getAABBMin() const
 		{
 			return minPos;
@@ -555,6 +702,88 @@ void aobaker::BakeAoToVertices(
 						*((vec3*)(((char*)firstVertexPosition) + vertexStride * indices[j + 0])),
 						*((vec3*)(((char*)firstVertexPosition) + vertexStride * indices[j + 1])),
 						*((vec3*)(((char*)firstVertexPosition) + vertexStride * indices[j + 2])), &distance);
+				}
+				if (distance > conf.rayDistance)
+					distance = conf.rayDistance;
+				rayResults.push_back({ didHit, distance });
+			}
+			*aoTarget = ComputeOcclusion(rayResults, conf.rayDistance, conf.falloff);
+		}
+	}
+
+	for (int pass = 0; pass < conf.denoisePasses; pass++)
+	{
+		for (int i = 0; i < indexCount; i += 3)
+		{
+			float average =
+				(*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 0])) +
+					*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 1])) +
+					*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 2]))) / 3.0f;
+
+			*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 0])) = MathMix(*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 0])), average, conf.denoiseWeight);
+			*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 1])) = MathMix(*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 1])), average, conf.denoiseWeight);
+			*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 2])) = MathMix(*((float*)(((char*)firstAoTarget) + targetStride * indices[i + 2])), average, conf.denoiseWeight);
+		}
+	}
+}
+
+void aobaker::BakeAoToVertices(
+	const double* firstVertexPosition, float* firstAoTarget, int vertexCount, size_t vertexStride, size_t targetStride,
+	const unsigned int* indices, int indexCount,
+	const config& conf)
+{
+	if (conf.voxelize)
+	{
+		voxelModel voxelized(firstVertexPosition, vertexCount, vertexStride, indices, indexCount, conf.voxelSize);
+
+		#pragma omp parallel for
+		for (int q = 0; q < vertexCount; q++)
+		{
+			vec3 vertexPos = *((dvec3*)(((char*)firstVertexPosition) + vertexStride * q));
+			float* aoTarget = (float*)(((char*)firstAoTarget) + targetStride * q);
+
+			std::vector<std::pair<bool, float>> rayResults;
+			for (int i = 0; i < conf.rayCount; i++)
+			{
+				vec3 rayDir = RandomUnitVec3();
+				if (conf.onlyCastRaysUpwards && rayDir.y < 0.0f)
+					rayDir.y = -rayDir.y;
+
+				float distance;
+				bool didHit = voxelized.castRay(vertexPos + (rayDir * conf.rayOriginOffset), rayDir, true, &distance);
+				if (distance > conf.rayDistance)
+					distance = conf.rayDistance;
+				rayResults.push_back({ didHit, distance });
+			}
+			*aoTarget = ComputeOcclusion(rayResults, conf.rayDistance, conf.falloff);
+		}
+	}
+	else
+	{
+		#pragma omp parallel for
+		for (int q = 0; q < vertexCount; q++)
+		{
+			vec3 vertexPos = *((dvec3*)(((char*)firstVertexPosition) + vertexStride * q));
+			float* aoTarget = (float*)(((char*)firstAoTarget) + targetStride * q);
+
+			std::vector<std::pair<bool, float>> rayResults;
+			for (int i = 0; i < conf.rayCount; i++)
+			{
+				vec3 rayDir = RandomUnitVec3();
+				if (conf.onlyCastRaysUpwards && rayDir.y < 0.0f)
+					rayDir.y = -rayDir.y;
+
+				bool didHit = false;
+				float distance;
+				for (int j = 0; j < indexCount && !didHit; j += 3) // for each face, intersect
+				{
+					if (indices[j + 0] == q || indices[j + 1] == q || indices[j + 2] == q)
+						continue; // current vertex belongs to this face
+
+					didHit = MathRayTriIntersect(vertexPos + (rayDir * conf.rayOriginOffset), rayDir,
+						*((dvec3*)(((char*)firstVertexPosition) + vertexStride * indices[j + 0])),
+						*((dvec3*)(((char*)firstVertexPosition) + vertexStride * indices[j + 1])),
+						*((dvec3*)(((char*)firstVertexPosition) + vertexStride * indices[j + 2])), &distance);
 				}
 				if (distance > conf.rayDistance)
 					distance = conf.rayDistance;

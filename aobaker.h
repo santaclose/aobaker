@@ -18,4 +18,9 @@ namespace aobaker {
 		const float* firstVertexPosition, float* firstAoTarget, int vertexCount, size_t vertexStride, size_t targetStride,
 		const unsigned int* indices, int indexCount,
 		const config& conf);
+
+	void BakeAoToVertices(
+		const double* firstVertexPosition, float* firstAoTarget, int vertexCount, size_t vertexStride, size_t targetStride,
+		const unsigned int* indices, int indexCount,
+		const config& conf);
 }

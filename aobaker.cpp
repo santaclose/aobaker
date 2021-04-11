@@ -220,7 +220,8 @@ namespace aobaker {
 	struct voxelModel {
 		vec3 minPos;
 		float voxelSize;
-		std::vector<std::vector<std::vector<bool>>> mat;
+		std::vector<bool> mat;
+		unsigned int voxelCount[3];
 		voxelModel::voxelModel(const float* firstVertexPosition, int vertexCount, unsigned int stride, const unsigned int* indices, int indexCount, float voxelSize)
 		{
 			this->voxelSize = voxelSize;
@@ -241,19 +242,12 @@ namespace aobaker {
 
 			minPos = minP;
 
-			unsigned int voxelCount[3];
 			voxelCount[0] = (unsigned int)std::ceil((maxP.x - minP.x) / voxelSize);
 			voxelCount[1] = (unsigned int)std::ceil((maxP.y - minP.y) / voxelSize);
 			voxelCount[2] = (unsigned int)std::ceil((maxP.z - minP.z) / voxelSize);
 
 			// allocate matrix
-			mat.resize(voxelCount[0]);
-			for (auto& vector : mat)
-			{
-				vector.resize(voxelCount[1]);
-				for (auto& subvector : vector)
-					subvector.resize(voxelCount[2]);
-			}
+			mat.resize(voxelCount[0] * voxelCount[1] * voxelCount[2]);
 
 			// rasterize
 			for (int indexI = 0; indexI < indexCount; indexI += 3)
@@ -280,29 +274,25 @@ namespace aobaker {
 				};
 
 				unsigned int minVoxelCoords[3];
-				minVoxelCoords[0] = MathClamp((int)((trianglebbmin.x - minPos.x) / voxelSize), 0, (int)(mat.size() - 1));
-				minVoxelCoords[1] = MathClamp((int)((trianglebbmin.y - minPos.y) / voxelSize), 0, (int)(mat[0].size() - 1));
-				minVoxelCoords[2] = MathClamp((int)((trianglebbmin.z - minPos.z) / voxelSize), 0, (int)(mat[0][0].size() - 1));
+				minVoxelCoords[0] = MathClamp((int)((trianglebbmin.x - minPos.x) / voxelSize), 0, (int)(voxelCount[0] - 1));
+				minVoxelCoords[1] = MathClamp((int)((trianglebbmin.y - minPos.y) / voxelSize), 0, (int)(voxelCount[1] - 1));
+				minVoxelCoords[2] = MathClamp((int)((trianglebbmin.z - minPos.z) / voxelSize), 0, (int)(voxelCount[2] - 1));
 
 				unsigned int maxVoxelCoords[3];
-				maxVoxelCoords[0] = MathClamp((int)((trianglebbmax.x - minPos.x) / voxelSize), 0, (int)(mat.size() - 1));
-				maxVoxelCoords[1] = MathClamp((int)((trianglebbmax.y - minPos.y) / voxelSize), 0, (int)(mat[0].size() - 1));
-				maxVoxelCoords[2] = MathClamp((int)((trianglebbmax.z - minPos.z) / voxelSize), 0, (int)(mat[0][0].size() - 1));
+				maxVoxelCoords[0] = MathClamp((int)((trianglebbmax.x - minPos.x) / voxelSize), 0, (int)(voxelCount[0] - 1));
+				maxVoxelCoords[1] = MathClamp((int)((trianglebbmax.y - minPos.y) / voxelSize), 0, (int)(voxelCount[1] - 1));
+				maxVoxelCoords[2] = MathClamp((int)((trianglebbmax.z - minPos.z) / voxelSize), 0, (int)(voxelCount[2] - 1));
 
-				std::vector<std::vector<bool>> xyMat;
-				std::vector<std::vector<bool>> xzMat;
-				std::vector<std::vector<bool>> zyMat;
-				std::vector<std::vector<std::vector<bool>>> xyzMat;
+				std::vector<bool> xyMat;
+				std::vector<bool> xzMat;
+				std::vector<bool> zyMat;
 
-				xyMat.resize(maxVoxelCoords[0] - minVoxelCoords[0] + 1);
-				for (auto& vec : xyMat)
-					vec.resize(maxVoxelCoords[1] - minVoxelCoords[1] + 1);
-				xzMat.resize(maxVoxelCoords[0] - minVoxelCoords[0] + 1);
-				for (auto& vec : xzMat)
-					vec.resize(maxVoxelCoords[2] - minVoxelCoords[2] + 1);
-				zyMat.resize(maxVoxelCoords[2] - minVoxelCoords[2] + 1);
-				for (auto& vec : zyMat)
-					vec.resize(maxVoxelCoords[1] - minVoxelCoords[1] + 1);
+				unsigned int xCount = maxVoxelCoords[0] - minVoxelCoords[0] + 1;
+				unsigned int yCount = maxVoxelCoords[1] - minVoxelCoords[1] + 1;
+				unsigned int zCount = maxVoxelCoords[2] - minVoxelCoords[2] + 1;
+				xyMat.resize(xCount * yCount);
+				xzMat.resize(xCount * zCount);
+				zyMat.resize(zCount * yCount);
 
 				for (int i = minVoxelCoords[0]; i <= maxVoxelCoords[0]; i++)
 				{
@@ -312,7 +302,7 @@ namespace aobaker {
 						vec2 tri0 = vec2(posA.x, posA.y);
 						vec2 tri1 = vec2(posB.x, posB.y);
 						vec2 tri2 = vec2(posC.x, posC.y);
-						xyMat[i - minVoxelCoords[0]][j - minVoxelCoords[1]] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
+						xyMat[(i - minVoxelCoords[0]) * yCount + (j - minVoxelCoords[1])] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
 					}
 				}
 
@@ -324,7 +314,7 @@ namespace aobaker {
 						vec2 tri0 = vec2(posA.x, posA.z);
 						vec2 tri1 = vec2(posB.x, posB.z);
 						vec2 tri2 = vec2(posC.x, posC.z);
-						xzMat[i - minVoxelCoords[0]][j - minVoxelCoords[2]] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
+						xzMat[(i - minVoxelCoords[0]) * zCount + (j - minVoxelCoords[2])] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
 					}
 				}
 
@@ -336,7 +326,7 @@ namespace aobaker {
 						vec2 tri0 = vec2(posA.z, posA.y);
 						vec2 tri1 = vec2(posB.z, posB.y);
 						vec2 tri2 = vec2(posC.z, posC.y);
-						zyMat[i - minVoxelCoords[2]][j - minVoxelCoords[1]] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
+						zyMat[(i - minVoxelCoords[2]) * yCount + (j - minVoxelCoords[1])] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
 					}
 				}
 
@@ -351,12 +341,12 @@ namespace aobaker {
 								vec3(i * voxelSize + voxelSize / 2.0f, j * voxelSize + voxelSize / 2.0f, k * voxelSize + voxelSize / 2.0f);
 
 							bool voxelValueForCurrentTri =
-								xyMat[i - minVoxelCoords[0]][j - minVoxelCoords[1]] &&
-								xzMat[i - minVoxelCoords[0]][k - minVoxelCoords[2]] &&
-								zyMat[k - minVoxelCoords[2]][j - minVoxelCoords[1]] &&
+								xyMat[(i - minVoxelCoords[0]) * yCount + (j - minVoxelCoords[1])] &&
+								xzMat[(i - minVoxelCoords[0]) * zCount + (k - minVoxelCoords[2])] &&
+								zyMat[(k - minVoxelCoords[2]) * yCount + (j - minVoxelCoords[1])] &&
 								std::abs(MathPlanePointDistance(triNormal, posA, voxelCenter)) < voxelSize * RASTERIZE_MAX_DISTANCE;
 
-							mat[i][j][k] = mat[i][j][k] || voxelValueForCurrentTri;
+							mat[i * voxelCount[1] * voxelCount[2] + j * voxelCount[2] + k] = mat[i * voxelCount[1] * voxelCount[2] + j * voxelCount[2] + k] || voxelValueForCurrentTri;
 						}
 					}
 				}
@@ -382,19 +372,12 @@ namespace aobaker {
 
 			minPos = minP;
 
-			unsigned int voxelCount[3];
 			voxelCount[0] = (unsigned int)std::ceil((maxP.x - minP.x) / voxelSize);
 			voxelCount[1] = (unsigned int)std::ceil((maxP.y - minP.y) / voxelSize);
 			voxelCount[2] = (unsigned int)std::ceil((maxP.z - minP.z) / voxelSize);
 
 			// allocate matrix
-			mat.resize(voxelCount[0]);
-			for (auto& vector : mat)
-			{
-				vector.resize(voxelCount[1]);
-				for (auto& subvector : vector)
-					subvector.resize(voxelCount[2]);
-			}
+			mat.resize(voxelCount[0] * voxelCount[1] * voxelCount[2]);
 
 			// rasterize
 			for (int indexI = 0; indexI < indexCount; indexI += 3)
@@ -421,29 +404,25 @@ namespace aobaker {
 				};
 
 				unsigned int minVoxelCoords[3];
-				minVoxelCoords[0] = MathClamp((int)((trianglebbmin.x - minPos.x) / voxelSize), 0, (int)(mat.size() - 1));
-				minVoxelCoords[1] = MathClamp((int)((trianglebbmin.y - minPos.y) / voxelSize), 0, (int)(mat[0].size() - 1));
-				minVoxelCoords[2] = MathClamp((int)((trianglebbmin.z - minPos.z) / voxelSize), 0, (int)(mat[0][0].size() - 1));
+				minVoxelCoords[0] = MathClamp((int)((trianglebbmin.x - minPos.x) / voxelSize), 0, (int)(voxelCount[0] - 1));
+				minVoxelCoords[1] = MathClamp((int)((trianglebbmin.y - minPos.y) / voxelSize), 0, (int)(voxelCount[1] - 1));
+				minVoxelCoords[2] = MathClamp((int)((trianglebbmin.z - minPos.z) / voxelSize), 0, (int)(voxelCount[2] - 1));
 
 				unsigned int maxVoxelCoords[3];
-				maxVoxelCoords[0] = MathClamp((int)((trianglebbmax.x - minPos.x) / voxelSize), 0, (int)(mat.size() - 1));
-				maxVoxelCoords[1] = MathClamp((int)((trianglebbmax.y - minPos.y) / voxelSize), 0, (int)(mat[0].size() - 1));
-				maxVoxelCoords[2] = MathClamp((int)((trianglebbmax.z - minPos.z) / voxelSize), 0, (int)(mat[0][0].size() - 1));
+				maxVoxelCoords[0] = MathClamp((int)((trianglebbmax.x - minPos.x) / voxelSize), 0, (int)(voxelCount[0] - 1));
+				maxVoxelCoords[1] = MathClamp((int)((trianglebbmax.y - minPos.y) / voxelSize), 0, (int)(voxelCount[1] - 1));
+				maxVoxelCoords[2] = MathClamp((int)((trianglebbmax.z - minPos.z) / voxelSize), 0, (int)(voxelCount[2] - 1));
 
-				std::vector<std::vector<bool>> xyMat;
-				std::vector<std::vector<bool>> xzMat;
-				std::vector<std::vector<bool>> zyMat;
-				std::vector<std::vector<std::vector<bool>>> xyzMat;
+				std::vector<bool> xyMat;
+				std::vector<bool> xzMat;
+				std::vector<bool> zyMat;
 
-				xyMat.resize(maxVoxelCoords[0] - minVoxelCoords[0] + 1);
-				for (auto& vec : xyMat)
-					vec.resize(maxVoxelCoords[1] - minVoxelCoords[1] + 1);
-				xzMat.resize(maxVoxelCoords[0] - minVoxelCoords[0] + 1);
-				for (auto& vec : xzMat)
-					vec.resize(maxVoxelCoords[2] - minVoxelCoords[2] + 1);
-				zyMat.resize(maxVoxelCoords[2] - minVoxelCoords[2] + 1);
-				for (auto& vec : zyMat)
-					vec.resize(maxVoxelCoords[1] - minVoxelCoords[1] + 1);
+				unsigned int xCount = maxVoxelCoords[0] - minVoxelCoords[0] + 1;
+				unsigned int yCount = maxVoxelCoords[1] - minVoxelCoords[1] + 1;
+				unsigned int zCount = maxVoxelCoords[2] - minVoxelCoords[2] + 1;
+				xyMat.resize(xCount * yCount);
+				xzMat.resize(xCount * zCount);
+				zyMat.resize(zCount * yCount);
 
 				for (int i = minVoxelCoords[0]; i <= maxVoxelCoords[0]; i++)
 				{
@@ -453,7 +432,7 @@ namespace aobaker {
 						vec2 tri0 = vec2(posA.x, posA.y);
 						vec2 tri1 = vec2(posB.x, posB.y);
 						vec2 tri2 = vec2(posC.x, posC.y);
-						xyMat[i - minVoxelCoords[0]][j - minVoxelCoords[1]] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
+						xyMat[(i - minVoxelCoords[0]) * yCount + (j - minVoxelCoords[1])] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
 					}
 				}
 
@@ -465,7 +444,7 @@ namespace aobaker {
 						vec2 tri0 = vec2(posA.x, posA.z);
 						vec2 tri1 = vec2(posB.x, posB.z);
 						vec2 tri2 = vec2(posC.x, posC.z);
-						xzMat[i - minVoxelCoords[0]][j - minVoxelCoords[2]] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
+						xzMat[(i - minVoxelCoords[0]) * zCount + (j - minVoxelCoords[2])] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
 					}
 				}
 
@@ -477,7 +456,7 @@ namespace aobaker {
 						vec2 tri0 = vec2(posA.z, posA.y);
 						vec2 tri1 = vec2(posB.z, posB.y);
 						vec2 tri2 = vec2(posC.z, posC.y);
-						zyMat[i - minVoxelCoords[2]][j - minVoxelCoords[1]] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
+						zyMat[(i - minVoxelCoords[2]) * yCount + (j - minVoxelCoords[1])] = MathTriPointDistance2D(voxelCenter, tri0, tri1, tri2) < voxelSize * RASTERIZE_MAX_DISTANCE;
 					}
 				}
 
@@ -492,12 +471,12 @@ namespace aobaker {
 								vec3(i * voxelSize + voxelSize / 2.0f, j * voxelSize + voxelSize / 2.0f, k * voxelSize + voxelSize / 2.0f);
 
 							bool voxelValueForCurrentTri =
-								xyMat[i - minVoxelCoords[0]][j - minVoxelCoords[1]] &&
-								xzMat[i - minVoxelCoords[0]][k - minVoxelCoords[2]] &&
-								zyMat[k - minVoxelCoords[2]][j - minVoxelCoords[1]] &&
+								xyMat[(i - minVoxelCoords[0]) * yCount + (j - minVoxelCoords[1])] &&
+								xzMat[(i - minVoxelCoords[0]) * zCount + (k - minVoxelCoords[2])] &&
+								zyMat[(k - minVoxelCoords[2]) * yCount + (j - minVoxelCoords[1])] &&
 								std::abs(MathPlanePointDistance(triNormal, posA, voxelCenter)) < voxelSize * RASTERIZE_MAX_DISTANCE;
 
-							mat[i][j][k] = mat[i][j][k] || voxelValueForCurrentTri;
+							mat[i * voxelCount[1] * voxelCount[2] + j * voxelCount[2] + k] = mat[i * voxelCount[1] * voxelCount[2] + j * voxelCount[2] + k] || voxelValueForCurrentTri;
 						}
 					}
 				}
@@ -509,7 +488,7 @@ namespace aobaker {
 		}
 		vec3 getAABBMax() const
 		{
-			return minPos + vec3(mat.size() * voxelSize, mat[0].size() * voxelSize, mat[0][0].size() * voxelSize);
+			return minPos + vec3(voxelCount[0] * voxelSize, voxelCount[1] * voxelSize, voxelCount[2] * voxelSize);
 		}
 		vec3 getVoxelCenterLocation(const unsigned int* coords) const
 		{
@@ -548,11 +527,11 @@ namespace aobaker {
 				currentVoxel[2] = (point.z - bbmin.z) / voxelSize;
 
 				if (currentVoxel[0] < 0) currentVoxel[0] = 0;
-				if (currentVoxel[0] > mat.size() - 1) currentVoxel[0] = mat.size() - 1;
+				if (currentVoxel[0] > voxelCount[0] - 1) currentVoxel[0] = voxelCount[0] - 1;
 				if (currentVoxel[1] < 0) currentVoxel[1] = 0;
-				if (currentVoxel[1] > mat[0].size() - 1) currentVoxel[1] = mat[0].size() - 1;
+				if (currentVoxel[1] > voxelCount[1] - 1) currentVoxel[1] = voxelCount[1] - 1;
 				if (currentVoxel[2] < 0) currentVoxel[2] = 0;
-				if (currentVoxel[2] > mat[0][0].size() - 1) currentVoxel[2] = mat[0][0].size() - 1;
+				if (currentVoxel[2] > voxelCount[2] - 1) currentVoxel[2] = voxelCount[2] - 1;
 			}
 			else
 			{
@@ -588,13 +567,13 @@ namespace aobaker {
 					if (tMax.x < tMax.z)
 					{
 						currentVoxel[0] = currentVoxel[0] + step[0];
-						if (currentVoxel[0] > mat.size() - 1) return false;
+						if (currentVoxel[0] > voxelCount[0] - 1) return false;
 						tMax.x = tMax.x + std::abs(tDelta.x);
 					}
 					else
 					{
 						currentVoxel[2] = currentVoxel[2] + step[2];
-						if (currentVoxel[2] > mat[0][0].size() - 1) return false;
+						if (currentVoxel[2] > voxelCount[2] - 1) return false;
 						tMax.z = tMax.z + std::abs(tDelta.z);
 					}
 				}
@@ -603,20 +582,21 @@ namespace aobaker {
 					if (tMax.y < tMax.z)
 					{
 						currentVoxel[1] = currentVoxel[1] + step[1];
-						if (currentVoxel[1] > mat[0].size() - 1) return false;
+						if (currentVoxel[1] > voxelCount[1] - 1) return false;
 						tMax.y = tMax.y + std::abs(tDelta.y);
 					}
 					else
 					{
 						currentVoxel[2] = currentVoxel[2] + step[2];
-						if (currentVoxel[2] > mat[0][0].size() - 1) return false;
+						if (currentVoxel[2] > voxelCount[2] - 1) return false;
 						tMax.z = tMax.z + std::abs(tDelta.z);
 					}
 				}
-				if (!mat[currentVoxel[0]][currentVoxel[1]][currentVoxel[2]] && !inAir)
+
+				if (!mat[currentVoxel[0] * voxelCount[1] * voxelCount[2] + currentVoxel[1] * voxelCount[2] + currentVoxel[2]] && !inAir)
 					inAir = true;
 
-				if (mat[currentVoxel[0]][currentVoxel[1]][currentVoxel[2]] && inAir)
+				if (mat[currentVoxel[0] * voxelCount[1] * voxelCount[2] + currentVoxel[1] * voxelCount[2] + currentVoxel[2]] && inAir)
 				{
 					if (out_t != nullptr)
 						*out_t = MathDistance(getVoxelCenterLocation(currentVoxel), origin);

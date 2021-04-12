@@ -628,8 +628,27 @@ namespace aobaker {
 void aobaker::BakeAoToVertices(
 	const float* firstVertexPosition, float* firstAoTarget, int vertexCount, unsigned int vertexStride, unsigned int targetStride,
 	const unsigned int* indices, int indexCount,
-	const config& conf)
+	config& conf)
 {
+	if (conf.autoConfigure)
+	{
+		vec3 minvpos, maxvpos;
+		for (int i = 0; i < vertexCount; i++)
+		{
+			vec3 vertexPos = *((vec3*)(((char*)firstVertexPosition) + vertexStride * i));
+			minvpos.x = std::min(vertexPos.x, minvpos.x);
+			minvpos.y = std::min(vertexPos.y, minvpos.y);
+			minvpos.z = std::min(vertexPos.z, minvpos.z);
+			maxvpos.x = std::max(vertexPos.x, maxvpos.x);
+			maxvpos.y = std::max(vertexPos.y, maxvpos.y);
+			maxvpos.z = std::max(vertexPos.z, maxvpos.z);
+		}
+		vec3 cornertocorner = maxvpos - minvpos;
+		conf.voxelSize = std::max(std::max(cornertocorner.x, cornertocorner.y), cornertocorner.z) / 500.0f;
+		conf.rayDistance = std::sqrt(MathDot(cornertocorner, cornertocorner));
+		conf.falloff = conf.rayDistance * 1.1f;
+	}
+
 	if (conf.voxelize)
 	{
 		voxelModel voxelized(firstVertexPosition, vertexCount, vertexStride, indices, indexCount, conf.voxelSize);
@@ -710,8 +729,27 @@ void aobaker::BakeAoToVertices(
 void aobaker::BakeAoToVertices(
 	const double* firstVertexPosition, float* firstAoTarget, int vertexCount, unsigned int vertexStride, unsigned int targetStride,
 	const unsigned int* indices, int indexCount,
-	const config& conf)
+	config& conf)
 {
+	if (conf.autoConfigure)
+	{
+		vec3 minvpos, maxvpos;
+		for (int i = 0; i < vertexCount; i++)
+		{
+			vec3 vertexPos = *((dvec3*)(((char*)firstVertexPosition) + vertexStride * i));
+			minvpos.x = std::min(vertexPos.x, minvpos.x);
+			minvpos.y = std::min(vertexPos.y, minvpos.y);
+			minvpos.z = std::min(vertexPos.z, minvpos.z);
+			maxvpos.x = std::max(vertexPos.x, maxvpos.x);
+			maxvpos.y = std::max(vertexPos.y, maxvpos.y);
+			maxvpos.z = std::max(vertexPos.z, maxvpos.z);
+		}
+		vec3 cornertocorner = maxvpos - minvpos;
+		conf.voxelSize = std::max(std::max(cornertocorner.x, cornertocorner.y), cornertocorner.z) / 500.0f;
+		conf.rayDistance = std::sqrt(MathDot(cornertocorner, cornertocorner));
+		conf.falloff = conf.rayDistance * 1.1f;
+	}
+
 	if (conf.voxelize)
 	{
 		voxelModel voxelized(firstVertexPosition, vertexCount, vertexStride, indices, indexCount, conf.voxelSize);

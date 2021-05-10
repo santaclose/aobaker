@@ -633,7 +633,8 @@ void aobaker::BakeAoToVertices(
 	if (conf.autoConfigure)
 	{
 		vec3 minvpos, maxvpos;
-		for (int i = 0; i < vertexCount; i++)
+		minvpos = maxvpos = *((vec3*)firstVertexPosition);
+		for (int i = 1; i < vertexCount; i++)
 		{
 			vec3 vertexPos = *((vec3*)(((char*)firstVertexPosition) + vertexStride * i));
 			minvpos.x = std::min(vertexPos.x, minvpos.x);
